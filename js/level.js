@@ -187,10 +187,11 @@ class LevelManager {
         const panelMat = new THREE.MeshBasicMaterial({
             map: texture,
             transparent: true,
-            opacity: 0.9,
-            side: THREE.DoubleSide
+            opacity: 0.95,
+            side: THREE.FrontSide
         });
         const panel = new THREE.Mesh(panelGeo, panelMat);
+        panel.rotation.set(0, 0, 0);
         group.add(panel);
 
         // ゲートフレーム（柱）
