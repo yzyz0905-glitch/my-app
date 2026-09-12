@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Count Masters - 群衆クラッシュ＆棒人間ランニングゲーム</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+    <!-- 3Dレンダリングコンテナ -->
+    <div id="game-container"></div>
+
+    <!-- UI レイヤー -->
+    <div id="ui-overlay">
+        <!-- 上部ヘッダー -->
+        <header class="header">
+            <div id="level-indicator" class="level-badge">LEVEL 1</div>
+            <div class="progress-container">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            <button id="btn-sound" class="sound-toggle-btn" aria-label="Toggle Sound">🔊</button>
+        </header>
+
+        <!-- 下部スキンセレクター -->
+        <div class="skin-selector">
+            <button class="skin-btn active" data-color="0x00a8ff" style="background-color: #00a8ff;" title="ブルー"></button>
+            <button class="skin-btn" data-color="0x1dd1a1" style="background-color: #1dd1a1;" title="グリーン"></button>
+            <button class="skin-btn" data-color="0xff9f43" style="background-color: #ff9f43;" title="オレンジ"></button>
+            <button class="skin-btn" data-color="0x9b59b6" style="background-color: #9b59b6;" title="パープル"></button>
+        </div>
+    </div>
+
+    <!-- スタート画面 -->
+    <div id="start-screen" class="modal-overlay">
+        <div class="start-guide">
+            <h1 class="start-title">COUNT MASTERS</h1>
+            <p class="start-prompt">左右にスワイプして走る！</p>
+            <div class="hand-icon">👆</div>
+        </div>
+    </div>
+
+    <!-- 勝利モーダル -->
+    <div id="victory-screen" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 class="modal-title victory">VICTORY!</h2>
+            <p id="victory-score" class="modal-subtitle">SCORE: +1,500 (x2.0)</p>
+            <p id="total-score" style="font-size: 16px; color: #8395a7; margin-bottom: 20px;">TOTAL: 1,500</p>
+            <button id="btn-next-level" class="btn-action">NEXT LEVEL ▶</button>
+        </div>
+    </div>
+
+    <!-- ゲームオーバーモーダル -->
+    <div id="gameover-screen" class="modal-overlay" style="display: none;">
+        <div class="modal-content">
+            <h2 class="modal-title defeat">CRUSHED!</h2>
+            <p class="modal-subtitle">軍隊が全滅してしまった...</p>
+            <button id="btn-retry" class="btn-action retry">TRY AGAIN ↺</button>
+        </div>
+    </div>
+
+    <!-- スクリプト読み込み -->
+    <script src="js/audio.js"></script>
+    <script src="js/stickman.js"></script>
+    <script src="js/level.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
