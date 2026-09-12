@@ -45,8 +45,7 @@ class Stickman {
 
     buildModel() {
         const mat = new THREE.MeshLambertMaterial({
-            color: this.color,
-            roughness: 0.4
+            color: this.color
         });
 
         // 頭部

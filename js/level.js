@@ -66,8 +66,7 @@ class LevelManager {
         const totalZ = trackLength + 60;
         const trackGeo = new THREE.PlaneGeometry(this.trackWidth, totalZ);
         const trackMat = new THREE.MeshLambertMaterial({
-            color: 0xf1f5f9,
-            roughness: 0.8
+            color: 0xf1f5f9
         });
         const track = new THREE.Mesh(trackGeo, trackMat);
         track.rotation.x = -Math.PI / 2;
@@ -108,7 +107,7 @@ class LevelManager {
         const ctx = canvas.getContext('2d');
 
         // 背景
-        ctx.fillStyle = isPositive ? 'rgba(0, 168, 255, 0.85)' : 'rgba(255, 71, 87, 0.85)';
+        ctx.fillStyle = isPositive ? 'rgba(0, 168, 255, 0.88)' : 'rgba(255, 71, 87, 0.88)';
         if (ctx.roundRect) ctx.roundRect(10, 10, 236, 236, 24);
         else ctx.rect(10, 10, 236, 236);
         ctx.fill();
@@ -120,12 +119,16 @@ class LevelManager {
 
         // テキスト
         ctx.fillStyle = '#ffffff';
-        ctx.font = 'bold 74px "Fredoka", "Arial Rounded MT Bold", sans-serif';
+        ctx.font = 'bold 76px "Fredoka", "Arial Rounded MT Bold", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(text, 128, 128);
 
         const texture = new THREE.CanvasTexture(canvas);
+        // 鏡文字・裏返しを100%確実に解消するための左右反転設定
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.repeat.x = -1;
+        texture.offset.x = 1;
         return texture;
     }
 
@@ -138,13 +141,14 @@ class LevelManager {
             let leftType, leftVal, rightType, rightVal;
 
             if (idx === 0) {
-                leftType = 'ADD'; leftVal = 10 + levelNumber * 2;
-                rightType = 'MUL'; rightVal = 2;
+                // 第1ゲートは爽快に増える選択肢
+                leftType = 'ADD'; leftVal = 15 + levelNumber * 5;
+                rightType = 'MUL'; rightVal = 3;
             } else if (idx === 1) {
-                leftType = 'MUL'; leftVal = 3;
-                rightType = 'ADD'; rightVal = 20;
+                leftType = 'ADD'; leftVal = 20;
+                rightType = 'MUL'; rightVal = 2;
             } else if (idx === 2) {
-                leftType = 'SUB'; leftVal = 10;
+                leftType = 'SUB'; leftVal = 5;
                 rightType = 'MUL'; rightVal = 2;
             } else {
                 leftType = 'ADD'; leftVal = 25;
@@ -181,17 +185,15 @@ class LevelManager {
         const group = new THREE.Group();
         group.position.set(x, gateHeight / 2, z);
 
-        // 半透明パネル（手前 +Z を向くように配置）
         const panelGeo = new THREE.PlaneGeometry(gateWidth, gateHeight);
         const texture = this.createGateCanvasTexture(text, isPositive);
         const panelMat = new THREE.MeshBasicMaterial({
             map: texture,
             transparent: true,
-            opacity: 0.95,
-            side: THREE.FrontSide
+            opacity: 0.92,
+            side: THREE.DoubleSide
         });
         const panel = new THREE.Mesh(panelGeo, panelMat);
-        panel.rotation.set(0, 0, 0);
         group.add(panel);
 
         // ゲートフレーム（柱）
@@ -220,11 +222,12 @@ class LevelManager {
     }
 
     buildObstacles(levelNumber, trackLength) {
+        // ゲート直後を避け、避ける猶予を持たせた配置
         const obstacleConfigs = [
-            { type: 'spinner', z: -40, x: 0 },
-            { type: 'moving', z: -70, x: -2 },
-            { type: 'spinner', z: -100, x: 1.5 },
-            { type: 'moving', z: -130, x: 2 }
+            { type: 'spinner', z: -42, x: 0 },
+            { type: 'moving', z: -72, x: -1.5 },
+            { type: 'spinner', z: -102, x: 0 },
+            { type: 'moving', z: -132, x: 1.5 }
         ];
 
         obstacleConfigs.forEach(cfg => {
@@ -239,15 +242,17 @@ class LevelManager {
                 const base = new THREE.Mesh(baseGeo, baseMat);
                 spinnerGroup.add(base);
 
-                const barGeo = new THREE.BoxGeometry(4.0, 0.3, 0.3);
+                // バーの長さを2.6にして左右に安全な回避通路を確保
+                const barLength = 2.6;
+                const barGeo = new THREE.BoxGeometry(barLength, 0.3, 0.3);
                 const barMat = new THREE.MeshLambertMaterial({ color: 0xff3838 });
                 const bar = new THREE.Mesh(barGeo, barMat);
                 bar.position.y = 0.2;
                 bar.castShadow = true;
                 spinnerGroup.add(bar);
 
-                for (let i = -1.6; i <= 1.6; i += 0.8) {
-                    if (Math.abs(i) < 0.3) continue;
+                for (let i = -0.9; i <= 0.9; i += 0.6) {
+                    if (Math.abs(i) < 0.2) continue;
                     const spikeGeo = new THREE.ConeGeometry(0.18, 0.4, 6);
                     const spikeMat = new THREE.MeshLambertMaterial({ color: 0xffdd59 });
                     const spike = new THREE.Mesh(spikeGeo, spikeMat);
@@ -262,11 +267,11 @@ class LevelManager {
                     bar: bar,
                     x: cfg.x,
                     z: cfg.z,
-                    radius: 2.1,
-                    rotSpeed: 3.0
+                    length: barLength,
+                    rotSpeed: 2.5
                 });
             } else if (cfg.type === 'moving') {
-                const blockGeo = new THREE.BoxGeometry(2.4, 1.2, 0.8);
+                const blockGeo = new THREE.BoxGeometry(2.0, 1.2, 0.8);
                 const blockMat = new THREE.MeshLambertMaterial({ color: 0xe02424 });
                 const block = new THREE.Mesh(blockGeo, blockMat);
                 block.position.set(cfg.x, 0.6, cfg.z);
@@ -278,9 +283,9 @@ class LevelManager {
                     group: block,
                     z: cfg.z,
                     baseX: cfg.x,
-                    width: 2.4,
+                    width: 2.0,
                     height: 1.2,
-                    speed: 2.5,
+                    speed: 2.0,
                     time: Math.random() * Math.PI
                 });
             }
@@ -292,7 +297,8 @@ class LevelManager {
         if (trackLength > 160) squadZPositions.push(-135);
 
         squadZPositions.forEach((z, idx) => {
-            const count = Math.min(10 + levelNumber * 5 + idx * 8, 45);
+            // 第1部隊は4〜5人、第2部隊は8〜10人（ゲートで増やした軍団で爽快に突破可能！）
+            const count = idx === 0 ? (4 + levelNumber) : (8 + levelNumber * 2);
             const squad = new EnemySquad(this.scene, 0, z, count);
             this.enemySquads.push(squad);
         });
@@ -455,7 +461,7 @@ class LevelManager {
         const trophyGroup = new THREE.Group();
         trophyGroup.position.set(0, y, z);
 
-        const goldMat = new THREE.MeshLambertMaterial({ color: 0xffd700, roughness: 0.3 });
+        const goldMat = new THREE.MeshLambertMaterial({ color: 0xffd700 });
 
         const baseGeo = new THREE.CylinderGeometry(1.0, 1.2, 0.5, 12);
         const base = new THREE.Mesh(baseGeo, goldMat);

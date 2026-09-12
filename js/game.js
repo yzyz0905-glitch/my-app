@@ -207,8 +207,11 @@ class Game {
         this.state = 'START';
 
         this.clearCrowd();
-        this.crowdCount = 1;
-        this.addStickman(0, 0);
+        this.crowdCount = 3; // 初期人数3人でスタート
+        for (let i = 0; i < 3; i++) {
+            const offset = CrowdFormation.getOffset(i, 0.36);
+            this.addStickman(offset.x, offset.z);
+        }
 
         this.levelManager.generateLevel(this.level);
 
@@ -392,11 +395,11 @@ class Game {
         if (gate.type === 'ADD') {
             newCount += gate.value;
         } else if (gate.type === 'SUB') {
-            newCount -= gate.value;
+            newCount = Math.max(1, newCount - gate.value); // 最低1人は残る
         } else if (gate.type === 'MUL') {
             newCount *= gate.value;
         } else if (gate.type === 'DIV') {
-            newCount = Math.floor(newCount / gate.value);
+            newCount = Math.max(1, Math.floor(newCount / gate.value)); // 最低1人は残る
         }
 
         this.setCrowdCount(newCount);
@@ -405,9 +408,11 @@ class Game {
     checkObstacleCollisions() {
         this.levelManager.obstacles.forEach(obs => {
             const distZ = Math.abs(this.playerZ - obs.z);
-            if (distZ > 3.0) return;
+            if (distZ > 2.5) return;
 
+            let frameDamage = 0;
             for (let i = this.crowd.length - 1; i >= 0; i--) {
+                if (frameDamage >= 2) break; // 1フレームあたり最大2体まで（瞬殺防止）
                 const sm = this.crowd[i];
                 if (sm.isDead || sm.isFlying) continue;
 
@@ -415,20 +420,25 @@ class Game {
                 if (obs.type === 'spinner') {
                     const dx = sm.mesh.position.x - obs.x;
                     const dz = sm.mesh.position.z - obs.z;
-                    const dist = Math.sqrt(dx * dx + dz * dz);
-                    if (dist < obs.radius) {
+                    const angle = -obs.group.rotation.y;
+                    const lx = dx * Math.cos(angle) - dz * Math.sin(angle);
+                    const lz = dx * Math.sin(angle) + dz * Math.cos(angle);
+                    const barLen = obs.length || 2.6;
+                    // 回転バーの細長い直方体に本当に当たった時だけ判定
+                    if (Math.abs(lx) < barLen / 2 && Math.abs(lz) < 0.35) {
                         hit = true;
                     }
                 } else if (obs.type === 'moving') {
                     const blockX = obs.group.position.x;
                     const dx = Math.abs(sm.mesh.position.x - blockX);
                     const dz = Math.abs(sm.mesh.position.z - obs.z);
-                    if (dx < obs.width / 2 + 0.2 && dz < 0.6) {
+                    if (dx < obs.width / 2 && dz < 0.45) {
                         hit = true;
                     }
                 }
 
                 if (hit) {
+                    frameDamage++;
                     sm.launch((sm.mesh.position.x - obs.x) * 2, 1.5, 2);
                     this.crowd.splice(i, 1);
                     this.crowdCount = this.crowd.length;
