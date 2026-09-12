@@ -7,9 +7,10 @@ class Game {
         this.state = 'START'; // 'START' | 'RUNNING' | 'BOSS_FIGHT' | 'STAIRS' | 'VICTORY' | 'GAMEOVER'
         this.playerColor = 0x00a8ff; // デフォルトブルー
 
-        // プレイヤー変数
+        // プレイヤー変数（手前 0 から奥 -Z へ進む）
         this.playerX = 0;
         this.playerZ = 0;
+        this.lastPlayerZ = 0;
         this.targetPlayerX = 0;
         this.forwardSpeed = 15.0;
         this.crowd = [];
@@ -21,8 +22,8 @@ class Game {
         this.inputSensitivity = 0.022;
         this.keys = { left: false, right: false };
 
-        // カメラ設定
-        this.cameraOffset = new THREE.Vector3(0, 11, -12);
+        // カメラ設定（手前 +Z 側から奥を見下ろす）
+        this.cameraOffset = new THREE.Vector3(0, 11, 12);
 
         // パーティクル
         this.particles = [];
@@ -41,14 +42,14 @@ class Game {
     initThree() {
         // シーン
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0xa0e7e5); // パステルブルー空
+        this.scene.background = new THREE.Color(0xa0e7e5);
         this.scene.fog = new THREE.Fog(0xa0e7e5, 60, 140);
 
-        // カメラ
+        // カメラ（手前 +Z から奥 -Z を見る）
         const aspect = window.innerWidth / window.innerHeight;
         this.camera = new THREE.PerspectiveCamera(55, aspect, 0.1, 300);
-        this.camera.position.set(0, 11, -12);
-        this.camera.lookAt(0, 0, 8);
+        this.camera.position.set(0, 11, 12);
+        this.camera.lookAt(0, 0, -8);
 
         // レンダラー
         this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
@@ -67,7 +68,7 @@ class Game {
         this.scene.add(hemiLight);
 
         this.dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        this.dirLight.position.set(20, 40, -20);
+        this.dirLight.position.set(20, 40, 20);
         this.dirLight.castShadow = true;
         this.dirLight.shadow.mapSize.width = 1024;
         this.dirLight.shadow.mapSize.height = 1024;
@@ -117,7 +118,6 @@ class Game {
         }
 
         this.playerBadgeMesh.visible = true;
-        // 青丸
         this.playerBadgeCtx.fillStyle = '#00a8ff';
         this.playerBadgeCtx.beginPath();
         this.playerBadgeCtx.arc(64, 64, 56, 0, Math.PI * 2);
@@ -137,7 +137,6 @@ class Game {
     }
 
     initInput() {
-        // ポインタ操作（マウス & タッチ）
         const onPointerDown = (e) => {
             window.sounds.init();
             this.isDragging = true;
@@ -154,6 +153,7 @@ class Game {
             const deltaX = currentX - this.lastPointerX;
             this.lastPointerX = currentX;
 
+            // 右にスワイプすると右（+X）、左にスワイプすると左（-X）へ移動
             this.targetPlayerX += deltaX * this.inputSensitivity;
             const maxX = 3.6;
             this.targetPlayerX = Math.max(-maxX, Math.min(maxX, this.targetPlayerX));
@@ -202,17 +202,16 @@ class Game {
         this.level = lvl;
         this.playerX = 0;
         this.playerZ = 0;
+        this.lastPlayerZ = 0;
         this.targetPlayerX = 0;
         this.state = 'START';
 
-        // 群衆の初期化（1人からスタート）
         this.clearCrowd();
         this.crowdCount = 1;
         this.addStickman(0, 0);
 
         this.levelManager.generateLevel(this.level);
 
-        // UI更新
         document.getElementById('level-indicator').innerText = `LEVEL ${this.level}`;
         document.getElementById('start-screen').style.display = 'flex';
         document.getElementById('victory-screen').style.display = 'none';
@@ -243,7 +242,6 @@ class Game {
         const diff = count - this.crowd.length;
 
         if (diff > 0) {
-            // 追加
             for (let i = 0; i < diff; i++) {
                 const idx = this.crowd.length;
                 const offset = CrowdFormation.getOffset(idx, 0.36);
@@ -252,11 +250,10 @@ class Game {
             window.sounds.playSpawnPop();
             this.spawnCrowdPopParticles();
         } else if (diff < 0) {
-            // 削減
             for (let i = 0; i < Math.abs(diff); i++) {
                 if (this.crowd.length > 0) {
                     const victim = this.crowd.pop();
-                    victim.launch((Math.random() - 0.5) * 2, 1, -1);
+                    victim.launch((Math.random() - 0.5) * 2, 1, 1);
                 }
             }
         }
@@ -327,13 +324,12 @@ class Game {
     }
 
     update(delta) {
-        // キーボード操作の反映
+        // キーボード操作
         if (this.keys.left) this.targetPlayerX -= 12 * delta;
         if (this.keys.right) this.targetPlayerX += 12 * delta;
         const maxX = 3.6;
         this.targetPlayerX = Math.max(-maxX, Math.min(maxX, this.targetPlayerX));
 
-        // 状態ごとの更新
         if (this.state === 'RUNNING') {
             this.updateRunning(delta);
         } else if (this.state === 'BOSS_FIGHT') {
@@ -342,40 +338,29 @@ class Game {
             this.updateStairs(delta);
         }
 
-        // 棒人間のスォーム更新
         this.updateCrowd(delta);
-
-        // ステージ要素の更新
         this.levelManager.update(delta, this.playerZ);
-
-        // パーティクルの更新
         this.updateParticles(delta);
-
-        // カメラ追従
         this.updateCamera(delta);
     }
 
     updateRunning(delta) {
-        // 前進
+        // 奥（-Z）へ前進
         this.lastPlayerZ = this.playerZ;
-        this.playerZ += this.forwardSpeed * delta;
+        this.playerZ -= this.forwardSpeed * delta;
         this.playerX += (this.targetPlayerX - this.playerX) * Math.min(1.0, delta * 14);
 
-        // プログレスバー更新
-        const progress = Math.min(1.0, this.playerZ / this.levelManager.finishLineZ);
+        // プログレスバー
+        const progress = Math.min(1.0, Math.abs(this.playerZ) / this.levelManager.finishLineZ);
         this.updateProgress(progress);
 
-        // 1. ゲート通過判定
+        // 判定
         this.checkGateCollisions();
-
-        // 2. 障害物接触判定
         this.checkObstacleCollisions();
-
-        // 3. 敵部隊激突判定
         this.checkEnemyCollisions(delta);
 
-        // 4. ゴール到達判定
-        if (this.playerZ >= this.levelManager.finishLineZ) {
+        // ゴール到達判定（-finishLineZ まで到達）
+        if (this.playerZ <= -this.levelManager.finishLineZ) {
             this.startBossFight();
         }
     }
@@ -384,17 +369,15 @@ class Game {
         this.levelManager.gates.forEach(pair => {
             if (pair.passed) return;
 
-            // プレイヤー群衆がゲートのZ面をまたいだか判定
-            if ((this.lastPlayerZ <= pair.z && this.playerZ >= pair.z) || 
-                (this.playerZ >= pair.z - 0.6 && this.playerZ <= pair.z + 1.2)) {
+            // プレイヤーがゲート面（奥 -Z 方向）を通過したか
+            if ((this.lastPlayerZ >= pair.z && this.playerZ <= pair.z) || 
+                (this.playerZ <= pair.z + 0.6 && this.playerZ >= pair.z - 1.2)) {
                 pair.passed = true;
 
-                // 左右どちらのゲートを通過したか判定
-                // プレイヤーのX座標が0以上なら右、0未満なら左
+                // 左右判定：playerX >= 0 なら右ゲート(gates[1])、0未満なら左ゲート(gates[0])
                 const chosenGate = (this.playerX >= 0) ? pair.gates[1] : pair.gates[0];
                 this.applyGateEffect(chosenGate);
 
-                // アニメーション（ゲートが少し縮んで消える演出）
                 pair.gates.forEach(g => {
                     g.group.scale.set(0.9, 0.9, 0.9);
                 });
@@ -421,11 +404,9 @@ class Game {
 
     checkObstacleCollisions() {
         this.levelManager.obstacles.forEach(obs => {
-            // プレイヤー群衆との距離チェック
             const distZ = Math.abs(this.playerZ - obs.z);
             if (distZ > 3.0) return;
 
-            // 各棒人間と障害物の接触
             for (let i = this.crowd.length - 1; i >= 0; i--) {
                 const sm = this.crowd[i];
                 if (sm.isDead || sm.isFlying) continue;
@@ -448,7 +429,7 @@ class Game {
                 }
 
                 if (hit) {
-                    sm.launch((sm.mesh.position.x - obs.x) * 2, 1.5, -2);
+                    sm.launch((sm.mesh.position.x - obs.x) * 2, 1.5, 2);
                     this.crowd.splice(i, 1);
                     this.crowdCount = this.crowd.length;
                     this.updatePlayerBadge();
@@ -471,21 +452,17 @@ class Game {
 
             const distZ = Math.abs(this.playerZ - squad.z);
             if (distZ < 2.0 + crowdRadius) {
-                // 激突相殺！ 1フレームあたり数体が相殺
                 const clashRate = 2;
                 for (let k = 0; k < clashRate; k++) {
                     if (squad.count <= 0 || this.crowd.length <= 0) break;
 
-                    // 敵1体消滅
                     squad.killOne();
 
-                    // 味方1体消滅
                     const playerSm = this.crowd.pop();
-                    playerSm.launch((Math.random() - 0.5) * 3, 1.5, -2);
+                    playerSm.launch((Math.random() - 0.5) * 3, 1.5, 2);
                     this.crowdCount = this.crowd.length;
                     this.updatePlayerBadge();
 
-                    // エフェクト & サウンド
                     this.createParticle(playerSm.mesh.position.x, 1.0, playerSm.mesh.position.z, 0xff4757, 0.25);
                     window.sounds.playClash();
                 }
@@ -504,41 +481,35 @@ class Game {
     }
 
     updateBossFight(delta) {
-        const boss = this.levelManager.boss;
-        const bossZ = this.levelManager.finishLineZ + 14;
+        const bossZ = -(this.levelManager.finishLineZ + 14);
 
-        // 群衆をボスの手前まで前進
-        if (this.playerZ < bossZ - 5) {
-            this.playerZ += 10 * delta;
+        // 群衆をボスの手前まで前進（奥へ進む）
+        if (this.playerZ > bossZ + 5) {
+            this.playerZ -= 10 * delta;
             this.playerX += (0 - this.playerX) * delta * 5;
             return;
         }
 
-        // 味方がボスへ次々と突撃！
         this.bossAttackTimer = (this.bossAttackTimer || 0) + delta;
         if (this.bossAttackTimer >= 0.08) {
             this.bossAttackTimer = 0;
 
             if (this.crowd.length > 0 && this.levelManager.bossHp > 0) {
-                // 味方1体がボスに向かってダイブ
                 const attacker = this.crowd.pop();
-                attacker.launch(0, 2, 4);
+                attacker.launch(0, 2, -4); // 奥のボスへダイブ
                 this.crowdCount = this.crowd.length;
                 this.updatePlayerBadge();
 
-                // ボスHP減少
                 this.levelManager.updateBossHp(this.levelManager.bossHp - 1);
                 window.sounds.playClash();
                 this.createParticle(0, 2.5, bossZ, 0xffd700, 0.3);
 
-                // ボス撃破！
                 if (this.levelManager.bossHp <= 0) {
                     setTimeout(() => {
                         this.startStairsClimb();
                     }, 600);
                 }
             } else if (this.crowd.length <= 0 && this.levelManager.bossHp > 0) {
-                // 味方全滅で敗北
                 this.triggerGameOver();
             }
         }
@@ -562,20 +533,19 @@ class Game {
                 const step = stairs[this.currentStairStep];
                 window.sounds.playStairStep(this.currentStairStep);
 
-                // 一部の棒人間をこの段に配置して歓声
                 const stickmenForStep = Math.min(3, this.crowd.length);
                 for (let i = 0; i < stickmenForStep; i++) {
                     const sm = this.crowd.pop();
                     sm.isCheering = true;
                     sm.baseY = step.y;
                     sm.mesh.position.set((i - 1) * 1.2, step.y, step.z);
+                    sm.mesh.rotation.y = 0; // 手前を向いて歓声！
                 }
                 this.crowdCount = this.crowd.length;
                 this.updatePlayerBadge();
 
                 this.currentStairStep++;
 
-                // 頂上到達または味方使い切りで勝利
                 if (this.currentStairStep >= stairs.length || this.crowd.length === 0) {
                     const finalMult = (this.currentStairStep > 0) ? stairs[this.currentStairStep - 1].mult : 1.0;
                     this.triggerVictory(finalMult);
@@ -588,10 +558,8 @@ class Game {
     }
 
     updateCrowd(delta) {
-        // 群衆の基準位置とバッジ
         this.playerBadgeMesh.position.set(this.playerX, 3.2, this.playerZ);
 
-        // 各棒人間の目標位置計算と更新
         for (let i = 0; i < this.crowd.length; i++) {
             const sm = this.crowd[i];
             if (!sm.isDead) {
@@ -609,7 +577,7 @@ class Game {
     }
 
     updateCamera(delta) {
-        // 群衆の後ろ上方からスムーズ追従
+        // 手前上空（+Z）から奥（-Z）を見下ろす自然なフォローカメラ
         const targetCamZ = this.playerZ + this.cameraOffset.z;
         const targetCamX = this.playerX * 0.5;
         const targetCamY = this.cameraOffset.y + Math.min(6, this.crowdCount * 0.03);
@@ -618,10 +586,10 @@ class Game {
         this.camera.position.y += (targetCamY - this.camera.position.y) * delta * 5;
         this.camera.position.z += (targetCamZ - this.camera.position.z) * delta * 8;
 
-        this.camera.lookAt(this.playerX * 0.3, 1.2, this.playerZ + 6);
+        this.camera.lookAt(this.playerX * 0.3, 1.2, this.playerZ - 6);
 
         // ライト追従
-        this.dirLight.position.set(this.playerX + 20, 40, this.playerZ - 20);
+        this.dirLight.position.set(this.playerX + 20, 40, this.playerZ + 20);
         this.dirLight.target.position.set(this.playerX, 0, this.playerZ);
     }
 
@@ -635,13 +603,12 @@ class Game {
         this.state = 'VICTORY';
         window.sounds.playVictory();
 
-        // 紙吹雪エフェクト
         for (let i = 0; i < 60; i++) {
             const colors = [0xffd700, 0xff4757, 0x2ed573, 0x1e90ff, 0xffa502];
             this.createParticle(
                 (Math.random() - 0.5) * 8,
                 4 + Math.random() * 4,
-                this.playerZ + 15 + Math.random() * 10,
+                this.playerZ - 15 - Math.random() * 10,
                 colors[Math.floor(Math.random() * colors.length)],
                 0.35
             );
@@ -680,7 +647,6 @@ class Game {
 window.addEventListener('DOMContentLoaded', () => {
     window.game = new Game();
 
-    // UIボタンイベントバインド
     document.getElementById('btn-next-level').addEventListener('click', () => {
         window.game.nextLevel();
     });
@@ -694,7 +660,6 @@ window.addEventListener('DOMContentLoaded', () => {
         e.target.innerText = isMuted ? '🔇' : '🔊';
     });
 
-    // スキン切り替えボタン
     const skinButtons = document.querySelectorAll('.skin-btn');
     skinButtons.forEach(btn => {
         btn.addEventListener('click', (e) => {

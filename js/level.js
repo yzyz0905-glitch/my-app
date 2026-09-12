@@ -18,7 +18,6 @@ class LevelManager {
     }
 
     clear() {
-        // 全オブジェクトの破棄
         while (this.trackGroup.children.length > 0) {
             const obj = this.trackGroup.children[0];
             if (obj.geometry) obj.geometry.dispose();
@@ -44,7 +43,7 @@ class LevelManager {
         this.clear();
 
         const trackLength = 160 + levelNumber * 20;
-        this.finishLineZ = trackLength;
+        this.finishLineZ = trackLength; // 正の値として保持（奥へ -trackLength まで進む）
 
         // 1. トラック（床）の生成
         this.buildTrack(trackLength);
@@ -63,20 +62,21 @@ class LevelManager {
     }
 
     buildTrack(trackLength) {
-        // 床メイン
-        const trackGeo = new THREE.PlaneGeometry(this.trackWidth, trackLength + 60);
+        // 床メイン（奥 -Z 方向に伸ばす）
+        const totalZ = trackLength + 60;
+        const trackGeo = new THREE.PlaneGeometry(this.trackWidth, totalZ);
         const trackMat = new THREE.MeshLambertMaterial({
             color: 0xf1f5f9,
             roughness: 0.8
         });
         const track = new THREE.Mesh(trackGeo, trackMat);
         track.rotation.x = -Math.PI / 2;
-        track.position.set(0, 0, (trackLength + 60) / 2 - 10);
+        track.position.set(0, 0, -totalZ / 2 + 10);
         track.receiveShadow = true;
         this.trackGroup.add(track);
 
-        // ガードレール（左・右）
-        const railGeo = new THREE.BoxGeometry(0.3, 0.5, trackLength + 60);
+        // ガードレール（左: -X, 右: +X）
+        const railGeo = new THREE.BoxGeometry(0.3, 0.5, totalZ);
         const railMat = new THREE.MeshLambertMaterial({ color: 0x38bdf8 });
 
         const railL = new THREE.Mesh(railGeo, railMat);
@@ -96,7 +96,7 @@ class LevelManager {
         for (let i = 0; i < lineCount; i++) {
             const stripe = new THREE.Mesh(stripeGeo, stripeMat);
             stripe.rotation.x = -Math.PI / 2;
-            stripe.position.set(0, 0.02, i * 6 + 5);
+            stripe.position.set(0, 0.02, -(i * 6 + 5));
             this.trackGroup.add(stripe);
         }
     }
@@ -109,7 +109,8 @@ class LevelManager {
 
         // 背景
         ctx.fillStyle = isPositive ? 'rgba(0, 168, 255, 0.85)' : 'rgba(255, 71, 87, 0.85)';
-        ctx.roundRect(10, 10, 236, 236, 24);
+        if (ctx.roundRect) ctx.roundRect(10, 10, 236, 236, 24);
+        else ctx.rect(10, 10, 236, 236);
         ctx.fill();
 
         // 境界線
@@ -129,16 +130,14 @@ class LevelManager {
     }
 
     buildGates(levelNumber, trackLength) {
-        // Z座標ごとに左右ペアでゲートを配置
-        const gateZPositions = [25, 55, 85, 115];
-        if (trackLength > 160) gateZPositions.push(145);
+        // Z座標ごとに左右ペアでゲートを配置（奥 -Z 方向）
+        const gateZPositions = [-25, -55, -85, -115];
+        if (trackLength > 160) gateZPositions.push(-145);
 
         gateZPositions.forEach((z, idx) => {
-            // パターン設定
             let leftType, leftVal, rightType, rightVal;
 
             if (idx === 0) {
-                // 初回は景気良く増やせる選択肢
                 leftType = 'ADD'; leftVal = 10 + levelNumber * 2;
                 rightType = 'MUL'; rightVal = 2;
             } else if (idx === 1) {
@@ -152,7 +151,6 @@ class LevelManager {
                 rightType = 'DIV'; rightVal = 2;
             }
 
-            // ランダムで左右シャッフル
             if (Math.random() > 0.5) {
                 [leftType, rightType] = [rightType, leftType];
                 [leftVal, rightVal] = [rightVal, leftVal];
@@ -163,8 +161,8 @@ class LevelManager {
                 z: z,
                 passed: false,
                 gates: [
-                    this.createSingleGate(-2.2, z, leftType, leftVal),
-                    this.createSingleGate(2.2, z, rightType, rightVal)
+                    this.createSingleGate(-2.2, z, leftType, leftVal), // 画面左
+                    this.createSingleGate(2.2, z, rightType, rightVal)  // 画面右
                 ]
             };
             this.gates.push(gatePair);
@@ -183,7 +181,7 @@ class LevelManager {
         const group = new THREE.Group();
         group.position.set(x, gateHeight / 2, z);
 
-        // 半透明パネル
+        // 半透明パネル（手前 +Z を向くように配置）
         const panelGeo = new THREE.PlaneGeometry(gateWidth, gateHeight);
         const texture = this.createGateCanvasTexture(text, isPositive);
         const panelMat = new THREE.MeshBasicMaterial({
@@ -221,28 +219,25 @@ class LevelManager {
     }
 
     buildObstacles(levelNumber, trackLength) {
-        // 回転トゲバーや左右スライドトゲ
         const obstacleConfigs = [
-            { type: 'spinner', z: 40, x: 0 },
-            { type: 'moving', z: 70, x: -2 },
-            { type: 'spinner', z: 100, x: 1.5 },
-            { type: 'moving', z: 130, x: 2 }
+            { type: 'spinner', z: -40, x: 0 },
+            { type: 'moving', z: -70, x: -2 },
+            { type: 'spinner', z: -100, x: 1.5 },
+            { type: 'moving', z: -130, x: 2 }
         ];
 
         obstacleConfigs.forEach(cfg => {
-            if (cfg.z >= trackLength - 20) return;
+            if (Math.abs(cfg.z) >= trackLength - 20) return;
 
             if (cfg.type === 'spinner') {
                 const spinnerGroup = new THREE.Group();
                 spinnerGroup.position.set(cfg.x, 0.5, cfg.z);
 
-                // 中央支柱
                 const baseGeo = new THREE.CylinderGeometry(0.3, 0.3, 1.0, 8);
                 const baseMat = new THREE.MeshLambertMaterial({ color: 0x333333 });
                 const base = new THREE.Mesh(baseGeo, baseMat);
                 spinnerGroup.add(base);
 
-                // 回転バー
                 const barGeo = new THREE.BoxGeometry(4.0, 0.3, 0.3);
                 const barMat = new THREE.MeshLambertMaterial({ color: 0xff3838 });
                 const bar = new THREE.Mesh(barGeo, barMat);
@@ -250,7 +245,6 @@ class LevelManager {
                 bar.castShadow = true;
                 spinnerGroup.add(bar);
 
-                // バーの周りのトゲ（円錐）
                 for (let i = -1.6; i <= 1.6; i += 0.8) {
                     if (Math.abs(i) < 0.3) continue;
                     const spikeGeo = new THREE.ConeGeometry(0.18, 0.4, 6);
@@ -271,7 +265,6 @@ class LevelManager {
                     rotSpeed: 3.0
                 });
             } else if (cfg.type === 'moving') {
-                // 左右に動くトゲブロック
                 const blockGeo = new THREE.BoxGeometry(2.4, 1.2, 0.8);
                 const blockMat = new THREE.MeshLambertMaterial({ color: 0xe02424 });
                 const block = new THREE.Mesh(blockGeo, blockMat);
@@ -294,9 +287,8 @@ class LevelManager {
     }
 
     buildEnemySquads(levelNumber, trackLength) {
-        // コース途中に待ち構える赤い敵集団
-        const squadZPositions = [50, 95];
-        if (trackLength > 160) squadZPositions.push(135);
+        const squadZPositions = [-50, -95];
+        if (trackLength > 160) squadZPositions.push(-135);
 
         squadZPositions.forEach((z, idx) => {
             const count = Math.min(10 + levelNumber * 5 + idx * 8, 45);
@@ -306,7 +298,7 @@ class LevelManager {
     }
 
     buildFinishArea(levelNumber, trackLength) {
-        const finishZ = trackLength;
+        const finishZ = -trackLength;
 
         // ゴールアーチ
         const archGeo = new THREE.BoxGeometry(this.trackWidth + 0.5, 0.6, 0.6);
@@ -349,12 +341,13 @@ class LevelManager {
         this.bossHp = 20 + levelNumber * 10;
         this.maxBossHp = this.bossHp;
         this.boss = new Stickman(this.scene, 0xd90429, false, true);
-        this.boss.mesh.position.set(0, 0, finishZ + 14);
+        this.boss.mesh.position.set(0, 0, finishZ - 14);
+        this.boss.mesh.rotation.y = Math.PI; // 手前（+Z）を向く
 
-        // ボスHPバー（3Dビルボード）
-        this.createBossHpBar(finishZ + 14);
+        // ボスHPバー
+        this.createBossHpBar(finishZ - 14);
 
-        // マルチプライヤー階段（Stairs 1.2x, 1.5x, 2.0x, 3.0x, 5.0x, 10.0x）
+        // マルチプライヤー階段（奥へ進む）
         const steps = [
             { mult: 1.2, color: 0x48dbfb },
             { mult: 1.5, color: 0x1dd1a1 },
@@ -364,10 +357,10 @@ class LevelManager {
             { mult: 10.0, color: 0xffd700 }
         ];
 
-        let startStairZ = finishZ + 20;
+        let startStairZ = finishZ - 20;
         steps.forEach((step, idx) => {
             const stairY = idx * 0.8 + 0.4;
-            const stairZ = startStairZ + idx * 4.0;
+            const stairZ = startStairZ - idx * 4.0;
 
             const stepGeo = new THREE.BoxGeometry(6.0, 0.8 * (idx + 1), 3.8);
             const stepMat = new THREE.MeshLambertMaterial({ color: step.color });
@@ -376,7 +369,7 @@ class LevelManager {
             stepMesh.receiveShadow = true;
             this.trackGroup.add(stepMesh);
 
-            // 倍率テキスト
+            // 倍率テキスト（上面に正方向で配置）
             const sCanvas = document.createElement('canvas');
             sCanvas.width = 256;
             sCanvas.height = 128;
@@ -405,7 +398,7 @@ class LevelManager {
         });
 
         // 頂上のトロフィー
-        this.buildTrophy(startStairZ + steps.length * 4.0 + 1.0, steps.length * 0.8 + 1.0);
+        this.buildTrophy(startStairZ - steps.length * 4.0 - 1.0, steps.length * 0.8 + 1.0);
     }
 
     createBossHpBar(zPos) {
@@ -431,19 +424,18 @@ class LevelManager {
         const pct = this.bossHp / this.maxBossHp;
 
         this.bossHpCtx.clearRect(0, 0, 256, 64);
-        // 背景枠
         this.bossHpCtx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        this.bossHpCtx.roundRect(8, 8, 240, 48, 12);
+        if (this.bossHpCtx.roundRect) this.bossHpCtx.roundRect(8, 8, 240, 48, 12);
+        else this.bossHpCtx.rect(8, 8, 240, 48);
         this.bossHpCtx.fill();
 
-        // ゲージ
         if (pct > 0) {
             this.bossHpCtx.fillStyle = '#ef233c';
-            this.bossHpCtx.roundRect(12, 12, 232 * pct, 40, 8);
+            if (this.bossHpCtx.roundRect) this.bossHpCtx.roundRect(12, 12, 232 * pct, 40, 8);
+            else this.bossHpCtx.rect(12, 12, 232 * pct, 40);
             this.bossHpCtx.fill();
         }
 
-        // テキスト
         this.bossHpCtx.fillStyle = '#ffffff';
         this.bossHpCtx.font = 'bold 24px "Fredoka", Arial';
         this.bossHpCtx.textAlign = 'center';
@@ -453,7 +445,7 @@ class LevelManager {
         this.bossHpTex.needsUpdate = true;
 
         if (this.bossHp <= 0 && this.boss && !this.boss.isDead) {
-            this.boss.launch(0, 2, 2);
+            this.boss.launch(0, 2, -2);
             if (this.bossHpMesh) this.bossHpMesh.visible = false;
         }
     }
@@ -464,12 +456,10 @@ class LevelManager {
 
         const goldMat = new THREE.MeshLambertMaterial({ color: 0xffd700, roughness: 0.3 });
 
-        // 台座
         const baseGeo = new THREE.CylinderGeometry(1.0, 1.2, 0.5, 12);
         const base = new THREE.Mesh(baseGeo, goldMat);
         trophyGroup.add(base);
 
-        // カップ
         const cupGeo = new THREE.CylinderGeometry(1.2, 0.4, 1.5, 12);
         const cup = new THREE.Mesh(cupGeo, goldMat);
         cup.position.y = 1.0;
@@ -480,7 +470,6 @@ class LevelManager {
     }
 
     update(delta, playerZ) {
-        // 障害物の更新
         this.obstacles.forEach(obs => {
             if (obs.type === 'spinner') {
                 obs.group.rotation.y += delta * obs.rotSpeed;
@@ -490,17 +479,14 @@ class LevelManager {
             }
         });
 
-        // 敵部隊の更新
         this.enemySquads.forEach(squad => {
             squad.update(delta, playerZ);
         });
 
-        // ボスのアニメーション
         if (this.boss && !this.boss.isDead) {
             this.boss.update(delta, true, 8);
         }
 
-        // トロフィーの回転
         if (this.trophy) {
             this.trophy.rotation.y += delta * 1.5;
         }
@@ -531,7 +517,7 @@ class EnemySquad {
             const sm = new Stickman(this.scene, 0xef233c, false);
             const offset = CrowdFormation.getOffset(i, 0.35);
             sm.mesh.position.set(this.x + offset.x, 0, this.z + offset.z);
-            sm.mesh.rotation.y = Math.PI; // プレイヤー側（手前）を向く
+            sm.mesh.rotation.y = Math.PI; // 手前（+Z）を向く
             this.members.push(sm);
         }
     }
@@ -562,7 +548,6 @@ class EnemySquad {
             return;
         }
 
-        // 赤丸
         this.badgeCtx.fillStyle = '#ef233c';
         this.badgeCtx.beginPath();
         this.badgeCtx.arc(64, 64, 56, 0, Math.PI * 2);
@@ -584,19 +569,18 @@ class EnemySquad {
     update(delta, playerZ) {
         if (!this.isActive) return;
 
-        // プレイヤーが接近（距離25以内）したら前進チャージ！
-        const dist = this.z - playerZ;
+        // プレイヤーが接近（playerZ は負の数なので、手前から奥へ迫る：playerZ - this.z < 25 && playerZ > this.z）
+        const dist = playerZ - this.z;
         if (dist < 25 && dist > 0) {
             this.isCharging = true;
         }
 
         if (this.isCharging && this.count > 0) {
             const chargeSpeed = 4.0;
-            this.z -= delta * chargeSpeed;
+            this.z += delta * chargeSpeed; // 手前（+Z）に向かって突撃！
             if (this.badgeMesh) this.badgeMesh.position.z = this.z;
         }
 
-        // 生きているメンバーのアニメーション
         for (let i = 0; i < this.members.length; i++) {
             const sm = this.members[i];
             if (!sm.isDead) {
@@ -613,7 +597,7 @@ class EnemySquad {
         const alive = this.members.filter(m => !m.isDead && !m.isFlying);
         if (alive.length > 0) {
             const victim = alive[alive.length - 1];
-            victim.launch((Math.random() - 0.5) * 2, 1, 1);
+            victim.launch((Math.random() - 0.5) * 2, 1, -1);
             this.count--;
             this.updateBadge();
             if (this.count <= 0) {

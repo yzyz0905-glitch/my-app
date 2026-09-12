@@ -25,6 +25,8 @@ class Stickman {
 
         this.mesh = new THREE.Group();
         this.buildModel();
+        // プレイヤーは奥（0）を向き、敵/ボスは手前（Math.PI）を向く
+        this.mesh.rotation.y = this.isPlayer ? 0 : Math.PI;
         this.scene.add(this.mesh);
 
         // 物理・アニメーション変数
@@ -53,6 +55,22 @@ class Stickman {
         this.head.position.y = 1.35 * this.scale;
         this.head.castShadow = true;
         this.mesh.add(this.head);
+
+        // 顔の目（奥 -Z を向いたときの正面に2つの目を配置）
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const pupilMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
+        const eyeGeo = new THREE.SphereGeometry(0.06 * this.scale, 6, 6);
+        const pupilGeo = new THREE.SphereGeometry(0.035 * this.scale, 6, 6);
+
+        [-0.09, 0.09].forEach(xOffset => {
+            const eye = new THREE.Mesh(eyeGeo, eyeMat);
+            eye.position.set(xOffset * this.scale, 1.38 * this.scale, -0.24 * this.scale);
+            this.mesh.add(eye);
+
+            const pupil = new THREE.Mesh(pupilGeo, pupilMat);
+            pupil.position.set(xOffset * this.scale, 1.38 * this.scale, -0.28 * this.scale);
+            this.mesh.add(pupil);
+        });
 
         // ボスなら王冠を載せる
         if (this.isBoss) {
